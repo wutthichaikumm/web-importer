@@ -1,11 +1,15 @@
 import {
   buildExportText,
+  chapterContentProblem,
   chaptersToRetry,
   chaptersToStart,
   exportableChapters,
+  findRepeatedChapter,
   formatExportFilename,
+  formatExportText,
   importerControls,
   isActiveRequest,
+  retryUntilValid,
   runProgress,
   runWithConcurrency,
   selectChapterRange,
@@ -13,6 +17,7 @@ import {
 import { copyText } from "./clipboard.js";
 
 const COPIED_LABEL_MS = 2000;
+const MAX_FETCH_ATTEMPTS = 5;
 
 const STATUS_TEXT = {
   idle: "",
@@ -36,6 +41,7 @@ const state = {
   shiftHeld: false,
   stopHadFocus: false,
   copiedUntil: 0,
+  wrongPages: new Set(), // bodies of pages known not to be a chapter (seen twice under different chapters)
   rows: new Map(),
   renderedLocked: null,
 };
@@ -147,8 +153,9 @@ function updateRow(chapter) {
   const refs = state.rows.get(chapter.idx);
   if (!refs) return;
 
-  const statusText =
+  let statusText =
     chapter.status === "error" ? chapter.error || "ล้มเหลว" : STATUS_TEXT[chapter.status];
+  if (chapter.status === "fetching" && chapter.attempt > 1) statusText += ` (ครั้งที่ ${chapter.attempt})`;
   refs.row.dataset.status = chapter.status;
   refs.row.classList.toggle("is-selected", chapter.selected);
   refs.check.checked = chapter.selected;
@@ -287,6 +294,7 @@ async function loadToc(event) {
       error: "",
     }));
     state.runIds = new Set();
+    state.wrongPages = new Set();
     state.lastClickedIdx = null;
     dom.fetchSummary.textContent = "";
     renderList();
@@ -415,6 +423,47 @@ function summarizeRun() {
   else if (error > 0) setFlareStatus("error", "เกิดข้อผิดพลาด");
 }
 
+// Fetches one chapter and keeps trying until the page really is the chapter (right script,
+// not a copy of another chapter's page); gives up after MAX_FETCH_ATTEMPTS so the run moves on.
+function fetchChapterContent(chapter, controller, isCurrent) {
+  return retryUntilValid(
+    async () => {
+      try {
+        const { content } = await postJson("/api/chapter", { url: chapter.url }, { signal: controller.signal });
+        const key = content.replace(/\s/g, "");
+        const wrongScript = chapterContentProblem(chapter.title, content);
+        if (wrongScript) return { ok: false, problem: wrongScript };
+        if (state.wrongPages.has(key)) return { ok: false, problem: "ไม่ใช่เนื้อหา (หน้าผิดที่เคยเจอแล้ว)" };
+
+        const twin = findRepeatedChapter(state.chapters, content, chapter.idx);
+        if (twin) {
+          // The same page under two chapters: neither is a chapter, so take the earlier one back too.
+          state.wrongPages.add(key);
+          if (isCurrent()) {
+            twin.status = "error";
+            twin.content = "";
+            twin.error = "ไม่ใช่เนื้อหา: หน้าเดียวกับอีกตอน (กดลองดึงตอนที่ไม่สำเร็จเพื่อดึงใหม่)";
+            updateRow(twin);
+          }
+          return { ok: false, problem: `ไม่ใช่เนื้อหา (ซ้ำกับตอน #${twin.chapterNumber})` };
+        }
+        return { ok: true, value: content };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "ดึงไม่สำเร็จ";
+        return { ok: false, problem: message, fatal: controller.signal.aborted || message.startsWith("FlareSolverr unreachable") };
+      }
+    },
+    {
+      maxAttempts: MAX_FETCH_ATTEMPTS,
+      signal: controller.signal,
+      onAttempt: (number) => {
+        chapter.attempt = number;
+        if (isCurrent()) updateRow(chapter);
+      },
+    },
+  );
+}
+
 async function runFetch(chapters) {
   if (isLocked() || chapters.length === 0) return;
 
@@ -444,22 +493,18 @@ async function runFetch(chapters) {
       async (chapter) => {
         if (!isCurrent()) return;
         chapter.status = "fetching";
+        chapter.attempt = 1;
         updateRow(chapter);
         renderProgress();
 
-        try {
-          const result = await postJson(
-            "/api/chapter",
-            { url: chapter.url },
-            { signal: controller.signal },
-          );
-          if (!isCurrent()) return;
+        const result = await fetchChapterContent(chapter, controller, isCurrent);
+        if (!isCurrent()) return;
+        if (result.ok) {
           chapter.status = "done";
-          chapter.content = result.content;
-        } catch (error) {
-          if (!isCurrent()) return;
+          chapter.content = result.value;
+        } else {
           chapter.status = "error";
-          chapter.error = error instanceof Error ? error.message : "ดึงไม่สำเร็จ";
+          chapter.error = `ข้าม: ${result.problem} (ลองแล้ว ${result.attempts} ครั้ง)`;
         }
 
         updateRow(chapter);
@@ -513,6 +558,12 @@ function stopFetch() {
 
 // Export and reset
 
+// Same text for download and copy; optionally run through the 3 format steps of the .txt tab.
+function exportText(chapters) {
+  const text = buildExportText(chapters);
+  return dom.formatExport.checked ? formatExportText(text) : text;
+}
+
 async function copyExport() {
   const chapters = exportableChapters(state.chapters);
   if (chapters.length === 0) {
@@ -521,7 +572,7 @@ async function copyExport() {
   }
 
   try {
-    await copyText(buildExportText(chapters));
+    await copyText(exportText(chapters));
   } catch {
     setMessage("คัดลอกไม่สำเร็จ ลองกดดาวน์โหลด .txt แทน");
     announce("คัดลอกไม่สำเร็จ");
@@ -542,7 +593,7 @@ function downloadExport() {
     return;
   }
 
-  const blob = new Blob([buildExportText(chapters)], { type: "text/plain;charset=utf-8" });
+  const blob = new Blob([exportText(chapters)], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -572,6 +623,7 @@ function resetImporter() {
     lastClickedIdx: null,
     stopHadFocus: false,
     copiedUntil: 0,
+    wrongPages: new Set(),
   });
   dom.rangeFrom.value = "";
   dom.rangeTo.value = "";
@@ -620,6 +672,7 @@ export function initImporter() {
     retryButton: $("#retry-button"),
     exportButton: $("#export-button"),
     copyButton: $("#copy-button"),
+    formatExport: $("#format-export"),
     resetButton: $("#reset-button"),
     liveRegion: $("#live-region"),
   });

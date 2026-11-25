@@ -55,6 +55,7 @@ test("served UI exposes the tabbed importer workspace", async () => {
       "stop-button",
       "retry-button",
       "export-button",
+      "format-export",
       "copy-button",
       "reset-button",
       "chapter-list",
@@ -88,6 +89,9 @@ test("served UI includes local TXT formatting and range controls", async () => {
     assert.match(html, /id="format-file-button"/);
     assert.match(html, /id="download-formatted-button"/);
     assert.match(html, /id="copy-formatted-button"/);
+    for (const id of ["file-step-convert", "file-step-inline", "file-step-format", "file-step-clean", "file-step-range"]) {
+      assert.match(html, new RegExp(`id="${id}"`));
+    }
     assert.match(html, /id="file-tools-preview"/);
   } finally {
     await close(app.server);

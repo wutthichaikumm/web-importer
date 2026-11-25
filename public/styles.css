@@ -706,6 +706,44 @@ select:hover {
   cursor: pointer;
 }
 
+.steps {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.check input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 3px 0 0;
+  accent-color: var(--accent);
+}
+
+.check small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.check.sub {
+  margin-left: 26px;
+}
+
+.check:has(input:disabled) {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .range-fields {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -728,6 +766,30 @@ select:hover {
 
 .file-tools-status.is-error {
   color: var(--danger);
+}
+
+.file-tools-report {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line-bright);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.file-tools-report.is-warning {
+  border-left-color: var(--danger);
+  background: rgb(239 141 123 / 0.08);
+}
+
+.file-tools-report.is-ok {
+  border-left-color: var(--success);
 }
 
 .preview-heading {

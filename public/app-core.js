@@ -95,6 +95,249 @@ export function extractChapterRange(value, start, end) {
   return result ? `${result}\n` : "\n";
 }
 
+// Ports of fn/convert_chapter_numbers.py and fn/remove_empty_chapters.py.
+const DIGIT_VALUES = new Map([..."零一二三四五六七八九"].map((char, value) => [char, value]));
+[["〇", 0], ["两", 2], ["兩", 2]].forEach(([char, value]) => DIGIT_VALUES.set(char, value));
+["", "壹", "贰貳弍", "叁參叄", "肆", "伍", "陆陸", "柒", "捌", "玖"].forEach((chars, value) =>
+  [...chars].forEach((char) => DIGIT_VALUES.set(char, value)),
+);
+const SMALL_UNITS = new Map([["十", 10n], ["拾", 10n], ["百", 100n], ["佰", 100n], ["千", 1000n], ["仟", 1000n]]);
+const LARGE_UNITS = [..."万亿兆京垓秭穰沟涧正载极"].map((char, index) => [char, 10n ** BigInt(4 * (index + 1))]);
+const TRADITIONAL_UNITS = { 萬: "万", 億: "亿", 溝: "沟", 澗: "涧", 載: "载", 極: "极" };
+const NUMBER_CHARS = [
+  ...DIGIT_VALUES.keys(), ...SMALL_UNITS.keys(), ...LARGE_UNITS.map(([char]) => char), ...Object.keys(TRADITIONAL_UNITS),
+].join("");
+// ponytail: only ASCII and full-width digits (python's \d accepts every Unicode digit).
+const ARABIC_DIGITS = "0-9０-９";
+const NUMERIC_HEADING = `^[^\\S\\r\\n]*第([${ARABIC_DIGITS}]+)章?([^\\n]*)`;
+
+function chineseNumber(text) {
+  const number = text.replace(/[萬億溝澗載極]/g, (char) => TRADITIONAL_UNITS[char]);
+  for (const [unit, value] of [...LARGE_UNITS].reverse()) {
+    const at = number.lastIndexOf(unit);
+    if (at !== -1) {
+      const prefix = number.slice(0, at);
+      return (prefix ? chineseNumber(prefix) : 1n) * value + chineseNumber(number.slice(at + 1));
+    }
+  }
+
+  let section = 0n;
+  let digits = 0n;
+  for (const char of number) {
+    if (DIGIT_VALUES.has(char)) {
+      digits = digits * 10n + BigInt(DIGIT_VALUES.get(char));
+    } else {
+      section += (digits || 1n) * SMALL_UNITS.get(char);
+      digits = 0n;
+    }
+  }
+  return section + digits;
+}
+
+function headingBlock(number, title) {
+  const cleanTitle = title.trim();
+  return `\n\n第${number}章${cleanTitle ? ` ${cleanTitle}` : ""}\n\n`;
+}
+
+export function convertChapterNumbers(value, { inline = false } = {}) {
+  let text = String(value ?? "").replace(/\r\n?/g, "\n");
+  const numeric = (number, title) => headingBlock(number.normalize("NFKC"), title);
+
+  if (inline) {
+    const pattern = new RegExp(`^([^\\n]*?)第([${NUMBER_CHARS}]+)章([^\\n]*)|${NUMERIC_HEADING}`, "gm");
+    text = text.replace(pattern, (_match, prefix, chinese, title, number, numericTitle) =>
+      chinese === undefined
+        ? numeric(number, numericTitle)
+        : prefix.trimEnd() + headingBlock(chineseNumber(chinese), title),
+    );
+  } else {
+    text = text
+      .replace(new RegExp(`^([^\\S\\r\\n]*第)([${NUMBER_CHARS}]+)章`, "gm"), (_match, lead, chinese) =>
+        `${lead}${chineseNumber(chinese)}章`,
+      )
+      .replace(new RegExp(NUMERIC_HEADING, "gm"), (_match, number, title) => numeric(number, title));
+  }
+
+  return `${text.replace(/\n{3,}/g, "\n\n").trim()}\n`;
+}
+
+const EMPTY_CHECK_HEADING = new RegExp(`^[^\\S\\r\\n]*第[${ARABIC_DIGITS}${NUMBER_CHARS}]+章`);
+
+export function removeEmptyChapters(value) {
+  const text = String(value ?? "");
+  // ponytail: splits on \n only (python also splits on a lone \r and a few rarer separators).
+  const lines = text.match(/[^\n]*\n|[^\n]+$/g) ?? [];
+  const starts = lines.flatMap((line, index) => (EMPTY_CHECK_HEADING.test(line) ? [index] : []));
+  if (starts.length === 0) return { text, removed: 0 };
+
+  let result = lines.slice(0, starts[0]).join("");
+  let removed = 0;
+  starts.forEach((start, position) => {
+    const end = starts[position + 1] ?? lines.length;
+    if (lines.slice(start + 1, end).some((line) => line.trim())) {
+      result += lines.slice(start, end).join("");
+    } else {
+      removed += 1;
+    }
+  });
+  return { text: result, removed };
+}
+
+// The same three steps as the .txt tab (convert numbers with inline headings, add 章, drop empty chapters).
+export function formatExportText(text) {
+  return removeEmptyChapters(formatNovelText(convertChapterNumbers(text, { inline: true }))).text;
+}
+
+const SHORT_CHAPTER_CHARS = 100;
+const NUMBERED_HEADING = new RegExp(`^[^\\S\\r\\n]*第([${ARABIC_DIGITS}${NUMBER_CHARS}]+)章`);
+
+function headingNumber(text) {
+  return /^[0-9０-９]+$/.test(text) ? Number(text.normalize("NFKC")) : Number(chineseNumber(text));
+}
+
+// Checks chapter numbering: gaps, repeats, out-of-order headings, and chapters
+// with no body or a suspiciously short one (not real content).
+export function checkChapterNumbers(value) {
+  const chapters = [];
+  for (const line of String(value ?? "").split(/\r?\n/)) {
+    const match = NUMBERED_HEADING.exec(line);
+    if (match) chapters.push({ number: headingNumber(match[1]), body: "" });
+    else if (chapters.length) chapters.at(-1).body += line;
+  }
+
+  const counts = new Map();
+  chapters.forEach(({ number }) => counts.set(number, (counts.get(number) ?? 0) + 1));
+  const unique = [...counts.keys()].sort((a, b) => a - b);
+
+  const missing = [];
+  unique.forEach((number, index) => {
+    if (index > 0 && number - unique[index - 1] > 1) missing.push([unique[index - 1] + 1, number - 1]);
+  });
+
+  const sizes = chapters.map(({ number, body }) => ({ number, length: body.replace(/\s/g, "").length }));
+
+  // Short = under 100 chars, or (with enough chapters) under 40% of the median chapter.
+  const sortedLengths = sizes.map(({ length }) => length).sort((a, b) => a - b);
+  const median = sortedLengths[Math.floor(sortedLengths.length / 2)] ?? 0;
+  const shortLimit = Math.max(SHORT_CHAPTER_CHARS, sizes.length >= 5 ? Math.round(median * 0.4) : 0);
+
+  // Real chapters never match another chapter word for word; identical bodies mean a
+  // wrong page (ad, menu, error) was saved instead of the chapter.
+  const sameBody = new Map();
+  chapters.forEach(({ number, body }) => {
+    const key = body.replace(/\s/g, "");
+    if (key) sameBody.set(key, [...(sameBody.get(key) ?? []), number]);
+  });
+
+  return {
+    headings: chapters.length,
+    first: unique[0] ?? null,
+    last: unique.at(-1) ?? null,
+    missing,
+    duplicates: [...counts].filter(([, count]) => count > 1).map(([number, count]) => ({ number, count })),
+    outOfOrder: chapters.flatMap(({ number }, index) =>
+      index > 0 && number < chapters[index - 1].number ? [{ number, after: chapters[index - 1].number }] : [],
+    ),
+    empty: sizes.filter(({ length }) => length === 0).map(({ number }) => number),
+    short: sizes.filter(({ length }) => length > 0 && length < shortLimit),
+    shortLimit,
+    repeated: [...sameBody.values()].filter((numbers) => numbers.length > 1),
+  };
+}
+
+const SCRIPTS = [
+  ["cjk", /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/gu],
+  ["hangul", /\p{Script=Hangul}/gu],
+  ["thai", /\p{Script=Thai}/gu],
+  ["latin", /\p{Script=Latin}/gu],
+  ["cyrillic", /\p{Script=Cyrillic}/gu],
+];
+const countLetters = (text, pattern) => (text.match(pattern) ?? []).length;
+
+// A fetched page is only a chapter if it is written in the script of its title
+// (a Chinese title with a Latin or Thai page means an ad/menu page was saved).
+// Returns the reason when it is not, or null when it looks like the chapter.
+export function chapterContentProblem(title, content) {
+  const [script, titleLetters] = SCRIPTS.map(([name, pattern]) => [name, countLetters(title, pattern)]).sort(
+    (a, b) => b[1] - a[1],
+  )[0];
+  if (titleLetters < 2) return null;
+
+  const pattern = SCRIPTS.find(([name]) => name === script)[1];
+  const letters = SCRIPTS.reduce((sum, [, scriptPattern]) => sum + countLetters(content, scriptPattern), 0);
+  return countLetters(content, pattern) < letters * 0.4 || letters === 0
+    ? "ไม่ใช่เนื้อหา (ตัวอักษรไม่ตรงกับชื่อตอน)"
+    : null;
+}
+
+// Real chapters never repeat word for word, so a finished chapter with the same body is a wrong page.
+export function findRepeatedChapter(chapters, content, exceptIdx) {
+  const key = content.replace(/\s/g, "");
+  if (!key) return undefined;
+  return chapters.find(
+    (chapter) =>
+      chapter.idx !== exceptIdx && chapter.status === "done" && chapter.content.replace(/\s/g, "") === key,
+  );
+}
+
+// Runs `attempt(number)` until it returns { ok: true, value }. A { ok: false, problem } result is
+// retried after a growing pause, up to maxAttempts; `fatal: true` stops at once.
+export async function retryUntilValid(attempt, { maxAttempts = 5, delayMs = 1000, signal, onAttempt } = {}) {
+  let problem = "";
+  for (let number = 1; number <= Math.max(1, maxAttempts); number += 1) {
+    onAttempt?.(number);
+    const outcome = await attempt(number);
+    if (outcome.ok) return { ok: true, value: outcome.value, attempts: number };
+
+    problem = outcome.problem;
+    if (outcome.fatal || number >= maxAttempts) return { ok: false, problem, attempts: number };
+    if (!(await sleep(delayMs * number, signal))) return { ok: false, aborted: true, problem, attempts: number };
+  }
+}
+
+export function hasChapterProblems(check) {
+  return (
+    check.headings === 0 ||
+    [check.missing, check.duplicates, check.outOfOrder, check.empty, check.short, check.repeated].some(
+      (list) => list.length > 0,
+    )
+  );
+}
+
+function formatRanges(ranges) {
+  return ranges.map(([from, to]) => (from === to ? String(from) : `${from}–${to}`)).join(", ");
+}
+
+export function describeChapterCheck(check) {
+  if (check.headings === 0) return "ไม่พบหัวตอน (第N章) ในไฟล์";
+
+  const lines = [`ตรวจ ${check.headings} หัวตอน (第${check.first}–第${check.last})`];
+  const missingCount = check.missing.reduce((sum, [from, to]) => sum + to - from + 1, 0);
+  if (missingCount) lines.push(`ขาดเลข ${missingCount} ตอน: ${formatRanges(check.missing)}`);
+  if (check.duplicates.length) {
+    lines.push(`เลขซ้ำ: ${check.duplicates.map(({ number, count }) => `${number} (${count} ครั้ง)`).join(", ")}`);
+  }
+  if (check.outOfOrder.length) {
+    lines.push(`เรียงผิดลำดับ: ${check.outOfOrder.map(({ number, after }) => `${number} (ต่อจาก ${after})`).join(", ")}`);
+  }
+  if (check.empty.length) {
+    lines.push(`ตอนว่าง (ไม่มีเนื้อหา) ${check.empty.length} ตอน: ${check.empty.join(", ")}`);
+  }
+  if (check.short.length) {
+    const items = check.short.map(({ number, length }) => `${number} (${length} ตัว)`).join(", ");
+    lines.push(`ตอนสั้นผิดปกติ (น้อยกว่า ${check.shortLimit} ตัวอักษร) ${check.short.length} ตอน: ${items}`);
+  }
+  if (check.repeated.length) {
+    const total = check.repeated.reduce((sum, group) => sum + group.length, 0);
+    lines.push(
+      `เนื้อหาซ้ำกันทั้งตอน (น่าจะดึงผิดหน้าเว็บ) ${total} ตอน ใน ${check.repeated.length} กลุ่ม:`,
+      ...check.repeated.map((group) => `  ${group.join(" = ")}`),
+    );
+  }
+  if (!hasChapterProblems(check)) lines.push("✓ เลขเรียงครบ ไม่พบตอนว่าง ตอนสั้น หรือเนื้อหาซ้ำ");
+  return lines.join("\n");
+}
+
 export function formatPostProcessFilename(start, end) {
   return `formatted-chapters-${String(start).trim()}-${String(end).trim()}.txt`;
 }

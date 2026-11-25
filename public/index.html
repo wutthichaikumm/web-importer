@@ -187,6 +187,11 @@
               <p class="fetch-summary" id="fetch-summary"></p>
             </div>
 
+            <label class="check">
+              <input type="checkbox" id="format-export" checked />
+              <span>จัดรูปแบบก่อนดาวน์โหลด/คัดลอก <small>แปลงเลขตอนจีน · เติม 章 · ลบตอนว่าง</small></span>
+            </label>
+
             <div class="actions">
               <button class="button button-primary button-block" id="start-fetch-button" type="button" disabled>
                 เริ่มดึง 0 ตอน
@@ -219,7 +224,7 @@
         hidden
       >
         <div class="file-tools-header">
-          <h2>จัดรูปแบบและตัดช่วงตอน</h2>
+          <h2>จัดการไฟล์ .txt</h2>
           <p>ทำงานในเบราว์เซอร์ทั้งหมด ไฟล์ไม่ถูกอัปโหลดไปที่ server หรือ FlareSolverr</p>
         </div>
 
@@ -241,6 +246,30 @@
               </select>
             </div>
 
+            <fieldset class="steps">
+              <legend class="field-label">ขั้นตอนที่จะทำ (ทำตามลำดับนี้)</legend>
+              <label class="check">
+                <input type="checkbox" id="file-step-convert" />
+                <span>แปลงเลขตอนภาษาจีนเป็นเลขอารบิก และจัดหัวตอน <small>เช่น 第三百五十章 → 第350章 (convert_chapter_numbers.py)</small></span>
+              </label>
+              <label class="check sub">
+                <input type="checkbox" id="file-step-inline" disabled />
+                <span>แยกหัวตอนที่ติดอยู่กับข้อความก่อนหน้า <small>(--inline-chapters)</small></span>
+              </label>
+              <label class="check">
+                <input type="checkbox" id="file-step-format" checked />
+                <span>เติม 章 และจัดบรรทัดว่างรอบหัวตอน <small>(format_novel.py)</small></span>
+              </label>
+              <label class="check">
+                <input type="checkbox" id="file-step-clean" />
+                <span>ลบตอนที่ไม่มีเนื้อหา <small>(remove_empty_chapters.py)</small></span>
+              </label>
+              <label class="check">
+                <input type="checkbox" id="file-step-range" checked />
+                <span>ตัดเฉพาะช่วงตอน <small>(extract_range.py)</small></span>
+              </label>
+            </fieldset>
+
             <div class="range-fields">
               <div class="field">
                 <label class="field-label" for="file-tools-start">ตอนเริ่มต้น</label>
@@ -253,8 +282,11 @@
             </div>
 
             <div class="file-tools-actions">
+              <button class="button button-secondary" id="check-file-button" type="button" disabled>
+                ตรวจเลขตอน
+              </button>
               <button class="button button-primary" id="format-file-button" type="button" disabled>
-                จัดรูปแบบและตัดช่วง
+                ประมวลผลไฟล์
               </button>
               <button class="button button-download" id="download-formatted-button" type="button" disabled>
                 ดาวน์โหลดผลลัพธ์
@@ -269,6 +301,7 @@
             <p class="file-tools-status" id="file-tools-status" role="status" aria-live="polite">
               เลือกไฟล์ .txt เพื่อเริ่มต้น
             </p>
+            <pre class="file-tools-report" id="file-tools-report" hidden></pre>
             <div class="preview-heading">
               <span class="field-label">ตัวอย่างผลลัพธ์</span>
               <span class="preview-note">แสดงบางส่วน</span>
