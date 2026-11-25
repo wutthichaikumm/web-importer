@@ -6,12 +6,12 @@
   "author": "Wutthichai Kummala",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wutthichaikmm/web-importer.git"
+    "url": "git+https://github.com/wutthichaikumm/web-importer.git"
   },
   "bugs": {
-    "url": "https://github.com/wutthichaikmm/web-importer/issues"
+    "url": "https://github.com/wutthichaikumm/web-importer/issues"
   },
-  "homepage": "https://github.com/wutthichaikmm/web-importer#readme",
+  "homepage": "https://github.com/wutthichaikumm/web-importer#readme",
   "keywords": [
     "flaresolverr",
     "scraper",

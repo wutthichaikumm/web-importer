@@ -39,12 +39,12 @@
 
 ได้ `WebImporter-Setup.exe` ไฟล์เดียว (ราว 290 MB) ที่รวม Web Importer กับ FlareSolverr (และ Chrome ของมัน) ติดตั้งเฉพาะผู้ใช้ปัจจุบัน ไม่ต้องใช้สิทธิ์ admin และเลือกสร้าง shortcut บน Desktop ได้
 
-**ดาวน์โหลด:** [`WebImporter-Setup.exe` จากหน้า Releases](https://github.com/wutthichaikmm/web-importer/releases/latest) (ไฟล์ไม่ได้เซ็นชื่อดิจิทัล หากไม่มั่นใจ ตรวจ SHA-256 ที่ระบุไว้ในหน้า Release หรือสร้างเองจากซอร์ส)
+**ดาวน์โหลด:** [`WebImporter-Setup.exe` จากหน้า Releases](https://github.com/wutthichaikumm/web-importer/releases/latest) (ไฟล์ไม่ได้เซ็นชื่อดิจิทัล หากไม่มั่นใจ ตรวจ SHA-256 ที่ระบุไว้ในหน้า Release หรือสร้างเองจากซอร์ส)
 
 **หรือสร้างตัวติดตั้งเอง** ต้องใช้ Windows 10/11 (64 บิต), [Node.js](https://nodejs.org/) 20.12 ขึ้นไป (แนะนำ 24), [Git](https://git-scm.com/) และ [Inno Setup](https://jrsoftware.org/isinfo.php) 6 หรือ 7
 
 ```powershell
-git clone https://github.com/wutthichaikmm/web-importer.git
+git clone https://github.com/wutthichaikumm/web-importer.git
 cd web-importer
 npm install
 npm run build:installer
@@ -68,7 +68,7 @@ npm run build:installer
 **แบบรวม (แนะนำ)** คำสั่งเดียวเปิดทั้ง Web Importer และ FlareSolverr ให้:
 
 ```bash
-git clone https://github.com/wutthichaikmm/web-importer.git
+git clone https://github.com/wutthichaikumm/web-importer.git
 cd web-importer
 docker compose -f compose.all-in-one.yaml up -d --build
 ```
@@ -90,7 +90,7 @@ docker compose up -d --build
 ต้องมี [Node.js](https://nodejs.org/) 20 ขึ้นไป และ FlareSolverr ที่ทำงานอยู่ที่พอร์ต `8191` (เปิดด้วยคำสั่ง `docker run` ข้างบน หรือใช้ [ไฟล์ปฏิบัติการของ FlareSolverr](https://github.com/FlareSolverr/FlareSolverr/releases))
 
 ```bash
-git clone https://github.com/wutthichaikmm/web-importer.git
+git clone https://github.com/wutthichaikumm/web-importer.git
 cd web-importer
 npm install
 npm start
@@ -107,7 +107,7 @@ FlareSolverr ไม่มีตัวสำเร็จรูปสำหรั�
 3. เปิดเทอร์มินัลแล้วรัน:
 
    ```bash
-   git clone https://github.com/wutthichaikmm/web-importer.git
+   git clone https://github.com/wutthichaikumm/web-importer.git
    cd web-importer
    docker compose -f compose.all-in-one.yaml up -d --build
    open http://127.0.0.1:8787
@@ -122,7 +122,7 @@ FlareSolverr ไม่มีตัวสำเร็จรูปสำหรั�
 ```bash
 brew install node
 docker run -d --name flaresolverr -p 8191:8191 ghcr.io/flaresolverr/flaresolverr:latest
-git clone https://github.com/wutthichaikmm/web-importer.git
+git clone https://github.com/wutthichaikumm/web-importer.git
 cd web-importer
 npm install
 npm start
@@ -130,7 +130,7 @@ npm start
 
 แล้วเปิด <http://127.0.0.1:8787>
 
-> ผู้พัฒนาใช้ Windows เป็นหลัก ส่วนของ Mac นี้อาศัยอิมเมจ Docker ที่เผยแพร่สำหรับ arm64/amd64 และเทสต์ compose บนเครื่อง Windows แต่ **ยังไม่ได้ทดลองบน Mac จริง** ถ้าพบปัญหา แจ้งใน [Issues](https://github.com/wutthichaikmm/web-importer/issues) พร้อมรุ่นของ macOS และชิปที่ใช้ได้เลย ตัวติดตั้งแบบดับเบิลคลิก (แอป `.dmg`) สำหรับ Mac ยังไม่มี
+> ผู้พัฒนาใช้ Windows เป็นหลัก ส่วนของ Mac นี้อาศัยอิมเมจ Docker ที่เผยแพร่สำหรับ arm64/amd64 และเทสต์ compose บนเครื่อง Windows แต่ **ยังไม่ได้ทดลองบน Mac จริง** ถ้าพบปัญหา แจ้งใน [Issues](https://github.com/wutthichaikumm/web-importer/issues) พร้อมรุ่นของ macOS และชิปที่ใช้ได้เลย ตัวติดตั้งแบบดับเบิลคลิก (แอป `.dmg`) สำหรับ Mac ยังไม่มี
 
 ## วิธีใช้งาน
 
