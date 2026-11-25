@@ -1,6 +1,6 @@
 {
   "name": "web-importer",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Local tool that fetches novel chapters through FlareSolverr and exports them as a single UTF-8 text file",
   "license": "MIT",
   "author": "Wutthichai Kummala",
